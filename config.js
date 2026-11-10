@@ -6,12 +6,13 @@ window.RATING_CONFIG = {
   // 發表人名單：請改成實際同事姓名（順序＝發表順序）
   presenters: ["靜枝", "莉晴", "Maggie", "羿瑄"],
 
-  maxScore: 10,          // 每位發表人可給 1 ~ maxScore 分
+  minScore: 0,           // 最低分
+  maxScore: 10,          // 最高分（每位發表人可給 minScore ~ maxScore 分）
   prize: 1000,           // 第一名紅包金額（平分則均分）
-  allowSelfVote: false,  // false：選擇「我是誰」後，自己那一欄不用評
+  allowSelfVote: false,  // false：選擇「我是誰」後，不能投給自己
 
-  // 結果頁密碼（只有主辦人知道；前端密碼僅防誤開，不是高強度保護）
-  adminPin: "1110",
+  // 結果頁密碼：留空＝任何人都能看即時結果；填數字＝需輸入密碼
+  adminPin: "",
 
   // 選票上傳位置（ntfy.sh 公開訊息主題；主題名稱相當於密鑰，請勿外流）
   topic: "gongshi-fabiaohui-20261110-k7q2x9m",

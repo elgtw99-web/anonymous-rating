@@ -18,7 +18,7 @@ const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) fail++;
     const s = {};
     for (let p = 0; p < n; p++) {
       if (p === 0 && b === 0) continue;
-      s[p] = ((p * 3 + b * 7) % cfg.maxScore) + 1;
+      s[p] = (p * 3 + b * 7) % (cfg.maxScore + 1);
     }
     ballots.push(s);
   }

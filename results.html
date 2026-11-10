@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>評分結果（主辦人）</title>
+<title>評分結果</title>
 <style>
   :root{--bg:#f5f7fb;--ink:#1d2433;--mute:#6b7488;--accent:#3b6cf6;--line:#e3e8f2}
   *{box-sizing:border-box}
@@ -23,7 +23,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>📊 評分結果（主辦人專用）</h1>
+  <h1>📊 即時評分結果</h1>
   <div id="lock" class="card">
     請輸入主辦人密碼：<input id="pin" type="password" inputmode="numeric" autofocus>
     <button id="go">查看</button>
@@ -56,7 +56,8 @@
       r.list.forEach(function(x){
         var win = x.rank === 1 && x.count > 0;
         h += '<tr class="' + (win?"win":"") + '"><td>' + (win?"🏆 ":"") + x.rank + "</td><td>" + x.name +
-             "</td><td>" + x.total + "</td><td>" + x.count + "</td><td>" + x.avg.toFixed(2) + "</td></tr>";
+             "</td><td>" + x.total + "</td><td>" + x.count + "</td><td>" + x.avg.toFixed(2) +
+             '</td></tr><tr><td colspan="5" style="padding:0 8px 8px;border:0"><div style="background:#e9edf7;border-radius:6px;height:8px"><div style="background:' + (win?"#f5a623":"#3b6cf6") + ';height:8px;border-radius:6px;width:' + (x.avg/C.maxScore*100) + '%"></div></div></td></tr>';
       });
       $("tbl").innerHTML = h;
       if (!r.winners.length) $("winner").innerHTML = "尚無評分資料";
@@ -71,6 +72,8 @@
   $("go").onclick = unlock;
   $("pin").onkeydown = function(e){ if (e.key === "Enter") unlock(); };
   $("refresh").onclick = load;
+  setInterval(function(){ if ($("view").style.display !== "none") load(); }, 5000);
+  if (!C.adminPin) { $("lock").style.display="none"; $("view").style.display=""; load(); }
 })();
 </script>
 </body>
