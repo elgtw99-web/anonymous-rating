@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>匿名評分</title>
+<style>
+  :root{--bg:#f5f7fb;--card:#fff;--ink:#1d2433;--mute:#6b7488;--accent:#3b6cf6;--ok:#16a34a;--bad:#dc2626;--line:#e3e8f2}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Microsoft JhengHei","PingFang TC",sans-serif;line-height:1.5}
+  .wrap{max-width:720px;margin:0 auto;padding:16px 14px 90px}
+  h1{font-size:22px;margin:8px 0 2px}
+  .sub{color:var(--mute);font-size:14px;margin-bottom:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+  .card.self{opacity:.5}
+  .name{font-weight:700;font-size:17px;margin-bottom:8px}
+  .name small{color:var(--mute);font-weight:400;margin-left:6px}
+  .scores{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+  .scores button{padding:10px 0;font-size:16px;border:1px solid var(--line);background:#fff;border-radius:10px;cursor:pointer}
+  .scores button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+  select{width:100%;padding:10px;font-size:16px;border:1px solid var(--line);border-radius:10px;background:#fff}
+  .bar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 14px}
+  .bar .in{max-width:720px;margin:0 auto;display:flex;gap:10px;align-items:center}
+  .bar .prog{flex:1;font-size:14px;color:var(--mute)}
+  .btn{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:12px 22px;font-size:16px;font-weight:700;cursor:pointer}
+  .btn:disabled{background:#b7c2dc;cursor:not-allowed}
+  .msg{padding:14px;border-radius:12px;margin-bottom:12px}
+  .msg.ok{background:#e8f7ee;color:#14532d}.msg.err{background:#fdecec;color:#7f1d1d}.msg.info{background:#eef3ff;color:#1e3a8a}
+  .tag{display:inline-block;background:#fff3cd;color:#8a6d00;border-radius:6px;padding:1px 8px;font-size:12px;margin-left:6px}
+  .note{font-size:13px;color:var(--mute);margin:6px 0 14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="title"></h1>
+  <div class="sub" id="subtitle"></div>
+  <div id="test" class="msg info" style="display:none">測試模式：分數寫入獨立的測試資料，不會影響正式結果。</div>
+  <div id="done" class="msg ok" style="display:none">✅ 你已完成評分，謝謝！每台裝置只能投一次。</div>
+
+  <div id="form">
+    <div class="card">
+      <div class="name">你是誰？<small>（只用來跳過自己的那一欄，不會上傳）</small></div>
+      <select id="me"></select>
+    </div>
+    <div class="note">請給每位發表人 1 ~ <span id="max"></span> 分（<span id="max2"></span> 分最高）。評分完全匿名，系統只記錄分數，不記錄是誰投的。</div>
+    <div id="list"></div>
+  </div>
+</div>
+
+<div class="bar" id="bar">
+  <div class="in">
+    <div class="prog" id="prog"></div>
+    <button class="btn" id="submit" disabled>送出評分</button>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="core.js"></script>
+<script>
+(function(){
+  var C = window.RATING_CONFIG;
+  var params = new URLSearchParams(location.search);
+  var isTest = params.get("test") === "1";
+  var NS = isTest ? C.topic + "-test" : C.topic;
+  var client = RatingCore.makeClient(C, NS);
+  var VOTED_KEY = "voted:" + NS;
+  var scores = {};            // index -> score
+  var myIndex = -1;
+
+  document.getElementById("title").textContent = C.title;
+  document.getElementById("subtitle").textContent = C.subtitle;
+  document.getElementById("max").textContent = C.maxScore;
+  document.getElementById("max2").textContent = C.maxScore;
+  if (isTest) document.getElementById("test").style.display = "";
+  document.title = C.title;
+
+  var meSel = document.getElementById("me");
+  meSel.innerHTML = '<option value="-1">（我不在名單內／不想選）</option>' +
+    C.presenters.map(function(n,i){ return '<option value="'+i+'">'+n+'</option>'; }).join("");
+  meSel.onchange = function(){ myIndex = +meSel.value; if (myIndex>=0) delete scores[myIndex]; render(); };
+
+  function needed(){
+    return C.presenters.map(function(_,i){return i;}).filter(function(i){ return C.allowSelfVote || i !== myIndex; });
+  }
+
+  function render(){
+    var list = document.getElementById("list");
+    list.innerHTML = "";
+    C.presenters.forEach(function(name,i){
+      var self = !C.allowSelfVote && i === myIndex;
+      var card = document.createElement("div");
+      card.className = "card" + (self ? " self" : "");
+      card.innerHTML = '<div class="name">' + (i+1) + '. ' + name + (self ? '<span class="tag">本人・免評</span>' : '') + '</div>';
+      if (!self) {
+        var box = document.createElement("div"); box.className = "scores";
+        for (var s=1; s<=C.maxScore; s++) {
+          (function(s){
+            var b = document.createElement("button");
+            b.textContent = s;
+            if (scores[i] === s) b.className = "on";
+            b.onclick = function(){ scores[i] = s; render(); };
+            box.appendChild(b);
+          })(s);
+        }
+        card.appendChild(box);
+      }
+      list.appendChild(card);
+    });
+    var need = needed(), got = need.filter(function(i){ return scores[i]; }).length;
+    document.getElementById("prog").textContent = "已評 " + got + " / " + need.length;
+    document.getElementById("submit").disabled = got !== need.length;
+  }
+
+  function showDone(){
+    document.getElementById("done").style.display = "";
+    document.getElementById("form").style.display = "none";
+    document.getElementById("bar").style.display = "none";
+  }
+
+  document.getElementById("submit").onclick = async function(){
+    var btn = this; btn.disabled = true; btn.textContent = "上傳中…";
+    var ballot = {};
+    needed().forEach(function(i){ ballot[i] = scores[i]; });
+    try {
+      await client.submitBallot(ballot);
+      localStorage.setItem(VOTED_KEY, "1");
+      showDone();
+    } catch(e) {
+      btn.disabled = false; btn.textContent = "重新送出";
+      alert("上傳失敗，請檢查網路後再按一次。\n（若已部分上傳，請勿反覆重試超過 2 次，並通知主辦人）");
+    }
+  };
+
+  if (localStorage.getItem(VOTED_KEY)) showDone(); else render();
+})();
+</script>
+</body>
+</html>

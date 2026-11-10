@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>評分結果（主辦人）</title>
+<style>
+  :root{--bg:#f5f7fb;--ink:#1d2433;--mute:#6b7488;--accent:#3b6cf6;--line:#e3e8f2}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Microsoft JhengHei","PingFang TC",sans-serif}
+  .wrap{max-width:820px;margin:0 auto;padding:16px 14px 40px}
+  h1{font-size:22px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:right}
+  th:nth-child(1),td:nth-child(1),th:nth-child(2),td:nth-child(2){text-align:left}
+  tr.win td{background:#fff8e1;font-weight:700}
+  input{padding:10px;font-size:16px;border:1px solid var(--line);border-radius:10px}
+  button{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:10px 18px;font-size:16px;cursor:pointer}
+  .big{font-size:18px;font-weight:700}
+  .mute{color:var(--mute);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📊 評分結果（主辦人專用）</h1>
+  <div id="lock" class="card">
+    請輸入主辦人密碼：<input id="pin" type="password" inputmode="numeric" autofocus>
+    <button id="go">查看</button>
+    <div class="mute" id="err"></div>
+  </div>
+  <div id="view" style="display:none">
+    <div class="card"><span id="stat">讀取中…</span>
+      <button id="refresh" style="float:right">重新整理</button></div>
+    <div class="card" id="winner"></div>
+    <div class="card"><table id="tbl"></table>
+      <div class="mute" style="margin-top:8px">排名依「平均分」計算（避免因自己免評造成票數不同的不公平）；平均分完全相同則並列、平分獎金。總分為所有評分加總。</div></div>
+  </div>
+</div>
+<script src="config.js"></script>
+<script src="core.js"></script>
+<script>
+(function(){
+  var C = window.RATING_CONFIG;
+  var isTest = new URLSearchParams(location.search).get("test") === "1";
+  var client = RatingCore.makeClient(C, isTest ? C.topic + "-test" : C.topic);
+  var $ = function(id){ return document.getElementById(id); };
+
+  async function load(){
+    $("stat").textContent = "讀取中…";
+    try {
+      var res = await client.fetchResults();
+      var r = RatingCore.rank(res.rows, C.prize);
+      $("stat").textContent = (isTest ? "【測試資料】" : "") + "已收到 " + res.ballots + " 張選票・更新時間 " + new Date().toLocaleTimeString();
+      var h = "<tr><th>名次</th><th>發表人</th><th>總分</th><th>評分人數</th><th>平均分</th></tr>";
+      r.list.forEach(function(x){
+        var win = x.rank === 1 && x.count > 0;
+        h += '<tr class="' + (win?"win":"") + '"><td>' + (win?"🏆 ":"") + x.rank + "</td><td>" + x.name +
+             "</td><td>" + x.total + "</td><td>" + x.count + "</td><td>" + x.avg.toFixed(2) + "</td></tr>";
+      });
+      $("tbl").innerHTML = h;
+      if (!r.winners.length) $("winner").innerHTML = "尚無評分資料";
+      else if (r.winners.length === 1) $("winner").innerHTML = '<div class="big">🥇 第一名：' + r.winners[0].name + '</div>紅包 NT$ ' + C.prize.toLocaleString() + " 由其獨得";
+      else $("winner").innerHTML = '<div class="big">🥇 並列第一：' + r.winners.map(function(w){return w.name;}).join("、") + '</div>紅包 NT$ ' + C.prize.toLocaleString() + " 平分，每人 NT$ " + r.each.toLocaleString();
+    } catch(e) { $("stat").textContent = "讀取失敗：" + e.message; }
+  }
+  function unlock(){
+    if ($("pin").value === C.adminPin) { $("lock").style.display="none"; $("view").style.display=""; load(); }
+    else $("err").textContent = "密碼錯誤";
+  }
+  $("go").onclick = unlock;
+  $("pin").onkeydown = function(e){ if (e.key === "Enter") unlock(); };
+  $("refresh").onclick = load;
+})();
+</script>
+</body>
+</html>
