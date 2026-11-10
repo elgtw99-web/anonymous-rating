@@ -12,16 +12,15 @@
   h1{font-size:22px;margin:8px 0 2px}
   .sub{color:var(--mute);font-size:14px;margin-bottom:14px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
-  .label{font-weight:700;margin-bottom:8px}
-  select{width:100%;padding:12px;font-size:16px;border:1px solid var(--line);border-radius:10px;background:#fff}
   .p{display:flex;justify-content:space-between;align-items:center;width:100%;padding:16px;margin-bottom:10px;font-size:18px;font-weight:700;background:#fff;border:1px solid var(--line);border-radius:12px;cursor:pointer;text-align:left;color:var(--ink)}
-  .p:disabled{background:#f0f2f7;color:#9aa3b5;cursor:not-allowed}
   .p span{font-size:13px;font-weight:400;color:var(--mute)}
   .p.done span{color:#16a34a;font-weight:700}
-  .scores{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}
-  .scores button{padding:16px 0;font-size:20px;border:1px solid var(--line);background:#fff;border-radius:10px;cursor:pointer;color:var(--ink)}
+  .crit{font-weight:700;margin:14px 0 6px}
+  .crit b{color:var(--accent);margin-left:6px}
+  .scores{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+  .scores button{padding:12px 0;font-size:17px;border:1px solid var(--line);background:#fff;border-radius:10px;cursor:pointer;color:var(--ink)}
   .scores button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
-  .btn{width:100%;background:var(--accent);color:#fff;border:0;border-radius:10px;padding:14px;font-size:17px;font-weight:700;cursor:pointer}
+  .btn{width:100%;background:var(--accent);color:#fff;border:0;border-radius:10px;padding:14px;font-size:17px;font-weight:700;cursor:pointer;margin-top:16px}
   .btn:disabled{background:#b7c2dc;cursor:not-allowed}
   .link{background:none;border:0;color:var(--accent);font-size:15px;cursor:pointer;padding:8px 0}
   .msg{padding:12px 14px;border-radius:12px;margin-bottom:12px;font-size:14px}
@@ -36,25 +35,19 @@
   <div id="test" class="msg info" style="display:none">測試模式：分數寫入獨立的測試資料，不會影響正式結果。</div>
   <div id="toast" class="msg ok" style="display:none"></div>
 
-  <!-- 畫面 1：選人 -->
   <div id="v1">
-    <div class="card">
-      <div class="label">你是誰？<small style="font-weight:400;color:#6b7488">（只存在你的手機，用來避免投給自己，不會上傳）</small></div>
-      <select id="me"></select>
-    </div>
-    <div class="label" style="margin:4px 2px 8px">每位發表完後，請點選發表人的名字再評分：</div>
+    <div class="sub" style="margin-bottom:8px">每位發表完後，請點選發表人的名字再評分（可以評自己）。完全匿名。</div>
     <div id="list"></div>
     <div style="text-align:center;margin-top:16px"><a class="link" href="results.html" style="text-decoration:none">📊 查看評分結果</a></div>
   </div>
 
-  <!-- 畫面 2：打分 -->
   <div id="v2" style="display:none">
     <button class="link" id="back">← 返回選人</button>
     <div class="card">
       <div class="sub" style="text-align:center;margin:0">你正在評分</div>
       <div class="big" id="who"></div>
-      <div class="sub" style="text-align:center;margin:0">請選 <span id="r0"></span> ~ <span id="r1"></span> 分（<span id="r2"></span> 分最高），匿名且送出後不能更改</div>
-      <div class="scores" id="scores"></div>
+      <div class="sub" style="text-align:center;margin:0">每項 <span id="r0"></span> ~ <span id="r1"></span> 分（<span id="r1b"></span> 分最高），匿名；送出後可在選人頁撤回</div>
+      <div id="crits"></div>
       <button class="btn" id="submit" disabled>送出</button>
     </div>
   </div>
@@ -64,32 +57,22 @@
 <script src="core.js"></script>
 <script>
 (function(){
-  var C = window.RATING_CONFIG;
-  var MIN = C.minScore || 0, MAX = C.maxScore;
+  var C = window.RATING_CONFIG, MIN = C.minScore || 0, MAX = C.maxScore, K = C.criteria.length;
   var isTest = new URLSearchParams(location.search).get("test") === "1";
   var TOPIC = isTest ? C.topic + "-test" : C.topic;
   var client = RatingCore.makeClient(C, TOPIC);
   var $ = function(id){ return document.getElementById(id); };
-  var DONE = "done:" + TOPIC + ":", ME = "me:" + TOPIC;
-  var cur = -1, chosen = null;
+  var DONE = "done2:" + TOPIC + ":";
+  var cur = -1, chosen = [];
 
   $("title").textContent = C.title; $("subtitle").textContent = C.subtitle; document.title = C.title;
-  $("r0").textContent = MIN; $("r1").textContent = MAX; $("r2").textContent = MAX;
+  $("r0").textContent = MIN; $("r1").textContent = MAX; $("r1b").textContent = MAX;
   if (isTest) $("test").style.display = "";
-
-  var meSel = $("me");
-  meSel.innerHTML = '<option value="-1">（請選擇你自己）</option>' +
-    C.presenters.map(function(n,i){ return '<option value="'+i+'">'+n+'</option>'; }).join("") +
-    '<option value="-2">我不在名單內</option>';
-  var saved = localStorage.getItem(ME); if (saved !== null) meSel.value = saved;
-  meSel.onchange = function(){ localStorage.setItem(ME, meSel.value); renderList(); };
-  var me = function(){ return +meSel.value; };
 
   function renderList(){
     var list = $("list"); list.innerHTML = "";
     C.presenters.forEach(function(name,i){
       var done = localStorage.getItem(DONE + i);
-      var self = !C.allowSelfVote && i === me();
       if (done) {
         var row = document.createElement("div");
         row.className = "p done"; row.style.cursor = "default";
@@ -99,60 +82,70 @@
         var w = document.createElement("button");
         w.textContent = "選錯？撤回"; w.className = "link"; w.style.padding = "0";
         w.onclick = function(){ withdraw(i, name); };
-        right.appendChild(w); row.appendChild(right);
-        list.appendChild(row);
+        right.appendChild(w); row.appendChild(right); list.appendChild(row);
         return;
       }
       var b = document.createElement("button");
       b.className = "p";
-      b.disabled = self;
-      b.innerHTML = '<div>' + (i+1) + '. ' + name + '</div><span>' + (self ? "本人・不能評" : "點我評分 ›") + '</span>';
+      b.innerHTML = '<div>' + (i+1) + '. ' + name + '</div><span>點我評分 ›</span>';
       b.onclick = function(){ openScore(i); };
       list.appendChild(b);
     });
   }
 
+  function updateSubmit(){
+    var ok = chosen.every(function(v){ return v !== null; });
+    var btn = $("submit"); btn.disabled = !ok;
+    if (!ok) { btn.textContent = "請完成 " + K + " 項評分"; return; }
+    var sum = chosen.reduce(function(a,b){ return a+b; }, 0);
+    btn.textContent = "送出給 " + C.presenters[cur] + "（總分 " + sum + " / " + K*MAX + "）";
+  }
+
   function openScore(i){
-    cur = i; chosen = null;
+    cur = i; chosen = C.criteria.map(function(){ return null; });
     $("who").textContent = C.presenters[i];
-    var box = $("scores"); box.innerHTML = "";
-    for (var s = MIN; s <= MAX; s++) (function(s){
-      var b = document.createElement("button"); b.textContent = s;
-      b.onclick = function(){
-        chosen = s;
-        Array.prototype.forEach.call(box.children, function(x){ x.className = ""; });
-        b.className = "on";
-        $("submit").disabled = false; $("submit").textContent = "送出給 " + C.presenters[cur] + "：" + s + " 分";
-      };
-      box.appendChild(b);
-    })(s);
-    $("submit").disabled = true; $("submit").textContent = "送出";
+    var box = $("crits"); box.innerHTML = "";
+    C.criteria.forEach(function(name, k){
+      var h = document.createElement("div"); h.className = "crit"; h.innerHTML = name + '<b></b>'; box.appendChild(h);
+      var g = document.createElement("div"); g.className = "scores";
+      for (var s = MIN; s <= MAX; s++) (function(s){
+        var b = document.createElement("button"); b.textContent = s;
+        b.onclick = function(){
+          chosen[k] = s;
+          Array.prototype.forEach.call(g.children, function(x){ x.className = ""; });
+          b.className = "on"; h.querySelector("b").textContent = s + " 分";
+          updateSubmit();
+        };
+        g.appendChild(b);
+      })(s);
+      box.appendChild(g);
+    });
+    updateSubmit();
     $("toast").style.display = "none";
     $("v1").style.display = "none"; $("v2").style.display = "";
     window.scrollTo(0,0);
   }
 
+  function backToList(){ $("v2").style.display = "none"; $("v1").style.display = ""; renderList(); }
+  $("back").onclick = backToList;
+
   async function withdraw(i, name){
     if (!confirm("撤回你對「" + name + "」的評分？撤回後該分數不會計入加總，你可以重新評分。")) return;
     try {
-      await client.retractBallot(localStorage.getItem(DONE + i));
+      await client.retractVote(localStorage.getItem(DONE + i));
       localStorage.removeItem(DONE + i);
       var t = $("toast"); t.textContent = "已撤回對「" + name + "」的評分，可重新評分。"; t.style.display = "";
       renderList();
     } catch(e) { alert("撤回失敗，請檢查網路後再試一次。"); }
   }
 
-  function backToList(){ $("v2").style.display = "none"; $("v1").style.display = ""; renderList(); }
-  $("back").onclick = backToList;
-
   $("submit").onclick = async function(){
-    if (chosen === null) return;
-    var btn = this, idx = cur, sc = chosen;
-    if (!confirm("請確認：你要給「" + C.presenters[idx] + "」" + sc + " 分？")) return;
+    var btn = this, idx = cur, sc = chosen.slice();
+    if (!confirm("請確認：你要評「" + C.presenters[idx] + "」？\n" +
+        C.criteria.map(function(n,k){ return n + " " + sc[k] + " 分"; }).join("、"))) return;
     btn.disabled = true; btn.textContent = "上傳中…";
     try {
-      var o = {}; o[idx] = sc;
-      var id = await client.submitBallot(o);
+      var id = await client.submitVote(idx, sc);
       localStorage.setItem(DONE + idx, id);
       var t = $("toast"); t.textContent = "✅ 已匿名送出對「" + C.presenters[idx] + "」的評分，謝謝！"; t.style.display = "";
       backToList();
@@ -161,7 +154,6 @@
     }
   };
 
-  if (me() === -1 && saved === null) meSel.value = "-1";
   renderList();
 })();
 </script>

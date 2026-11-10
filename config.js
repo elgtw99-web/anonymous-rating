@@ -6,10 +6,12 @@ window.RATING_CONFIG = {
   // 發表人名單：請改成實際同事姓名（順序＝發表順序）
   presenters: ["靜枝", "莉晴", "Maggie", "羿瑄"],
 
-  minScore: 0,           // 最低分
-  maxScore: 10,          // 最高分（每位發表人可給 minScore ~ maxScore 分）
+  // 評分項目：每位發表人每項都評 minScore ~ maxScore 分，三項加總為該票總分（滿分 = 項目數 × maxScore）
+  criteria: ["簡報內容", "簡報發表", "感想心得"],
+  minScore: 0,
+  maxScore: 10,
   prize: 1000,           // 第一名紅包金額（平分則均分）
-  allowSelfVote: false,  // false：選擇「我是誰」後，不能投給自己
+  // 任何人（含發表人本人）都可以投給任何人
 
   // 結果頁密碼：留空＝任何人都能看即時結果；填數字＝需輸入密碼
   adminPin: "",

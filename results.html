@@ -8,11 +8,11 @@
   :root{--bg:#f5f7fb;--ink:#1d2433;--mute:#6b7488;--accent:#3b6cf6;--line:#e3e8f2}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Microsoft JhengHei","PingFang TC",sans-serif}
-  .wrap{max-width:820px;margin:0 auto;padding:16px 14px 40px}
+  .wrap{max-width:860px;margin:0 auto;padding:16px 14px 40px}
   h1{font-size:22px}
-  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
-  table{width:100%;border-collapse:collapse}
-  th,td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:right}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;min-width:520px}
+  th,td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
   th:nth-child(1),td:nth-child(1),th:nth-child(2),td:nth-child(2){text-align:left}
   tr.win td{background:#fff8e1;font-weight:700}
   input{padding:10px;font-size:16px;border:1px solid var(--line);border-radius:10px}
@@ -24,40 +24,42 @@
 <body>
 <div class="wrap">
   <h1>📊 即時評分結果</h1>
-  <div id="lock" class="card">
-    請輸入主辦人密碼：<input id="pin" type="password" inputmode="numeric" autofocus>
-    <button id="go">查看</button>
-    <div class="mute" id="err"></div>
+  <div id="lock" class="card" style="display:none">
+    請輸入密碼：<input id="pin" type="password" inputmode="numeric">
+    <button id="go">查看</button> <span class="mute" id="err"></span>
   </div>
   <div id="view" style="display:none">
-    <div class="card"><span id="stat">讀取中…</span>
-      <button id="refresh" style="float:right">重新整理</button></div>
+    <div class="card"><span id="stat">讀取中…</span><button id="refresh" style="float:right">重新整理</button></div>
     <div class="card" id="winner"></div>
     <div class="card"><table id="tbl"></table>
-      <div class="mute" style="margin-top:8px">排名依「平均分」計算（避免因自己免評造成票數不同的不公平）；平均分完全相同則並列、平分獎金。總分為所有評分加總。</div></div>
+      <div class="mute" style="margin-top:8px" id="note"></div></div>
   </div>
 </div>
 <script src="config.js"></script>
 <script src="core.js"></script>
 <script>
 (function(){
-  var C = window.RATING_CONFIG;
+  var C = window.RATING_CONFIG, K = C.criteria.length, FULL = K * C.maxScore;
   var isTest = new URLSearchParams(location.search).get("test") === "1";
   var client = RatingCore.makeClient(C, isTest ? C.topic + "-test" : C.topic);
   var $ = function(id){ return document.getElementById(id); };
+  $("note").textContent = "每張評分的總分 = " + C.criteria.join(" + ") + "（滿分 " + FULL + "）。排名依「平均總分」計算；平均完全相同則並列、平分獎金。";
 
   async function load(){
-    $("stat").textContent = "讀取中…";
     try {
       var res = await client.fetchResults();
       var r = RatingCore.rank(res.rows, C.prize);
-      $("stat").textContent = (isTest ? "【測試資料】" : "") + "已收到 " + res.ballots + " 張選票・更新時間 " + new Date().toLocaleTimeString();
-      var h = "<tr><th>名次</th><th>發表人</th><th>總分</th><th>評分人數</th><th>平均分</th></tr>";
+      $("stat").textContent = (isTest ? "【測試資料】" : "") + "共 " + res.votes + " 筆有效評分・更新 " + new Date().toLocaleTimeString();
+      var h = "<tr><th>名次</th><th>發表人</th><th>評分數</th>" +
+        C.criteria.map(function(n){ return "<th>" + n + "<br><small>平均</small></th>"; }).join("") +
+        "<th>總分合計</th><th>平均總分<br><small>/" + FULL + "</small></th></tr>";
       r.list.forEach(function(x){
         var win = x.rank === 1 && x.count > 0;
-        h += '<tr class="' + (win?"win":"") + '"><td>' + (win?"🏆 ":"") + x.rank + "</td><td>" + x.name +
-             "</td><td>" + x.total + "</td><td>" + x.count + "</td><td>" + x.avg.toFixed(2) +
-             '</td></tr><tr><td colspan="5" style="padding:0 8px 8px;border:0"><div style="background:#e9edf7;border-radius:6px;height:8px"><div style="background:' + (win?"#f5a623":"#3b6cf6") + ';height:8px;border-radius:6px;width:' + (x.avg/C.maxScore*100) + '%"></div></div></td></tr>';
+        h += '<tr class="' + (win?"win":"") + '"><td>' + (win?"🏆 ":"") + x.rank + "</td><td>" + x.name + "</td><td>" + x.count + "</td>" +
+          x.crit.map(function(c){ return "<td>" + (x.count ? (c/x.count).toFixed(2) : "-") + "</td>"; }).join("") +
+          "<td>" + x.total + "</td><td>" + x.avg.toFixed(2) + "</td></tr>" +
+          '<tr><td colspan="' + (5+K) + '" style="padding:0 8px 8px;border:0"><div style="background:#e9edf7;border-radius:6px;height:8px"><div style="background:' +
+          (win?"#f5a623":"#3b6cf6") + ';height:8px;border-radius:6px;width:' + (x.avg/FULL*100) + '%"></div></div></td></tr>';
       });
       $("tbl").innerHTML = h;
       if (!r.winners.length) $("winner").innerHTML = "尚無評分資料";
@@ -65,15 +67,14 @@
       else $("winner").innerHTML = '<div class="big">🥇 並列第一：' + r.winners.map(function(w){return w.name;}).join("、") + '</div>紅包 NT$ ' + C.prize.toLocaleString() + " 平分，每人 NT$ " + r.each.toLocaleString();
     } catch(e) { $("stat").textContent = "讀取失敗：" + e.message; }
   }
-  function unlock(){
-    if ($("pin").value === C.adminPin) { $("lock").style.display="none"; $("view").style.display=""; load(); }
-    else $("err").textContent = "密碼錯誤";
+  function show(){ $("lock").style.display="none"; $("view").style.display=""; load(); setInterval(load, 5000); }
+  if (!C.adminPin) show();
+  else {
+    $("lock").style.display = "";
+    var unlock = function(){ $("pin").value === C.adminPin ? show() : ($("err").textContent = "密碼錯誤"); };
+    $("go").onclick = unlock; $("pin").onkeydown = function(e){ if (e.key === "Enter") unlock(); };
   }
-  $("go").onclick = unlock;
-  $("pin").onkeydown = function(e){ if (e.key === "Enter") unlock(); };
   $("refresh").onclick = load;
-  setInterval(function(){ if ($("view").style.display !== "none") load(); }, 5000);
-  if (!C.adminPin) { $("lock").style.display="none"; $("view").style.display=""; load(); }
 })();
 </script>
 </body>
